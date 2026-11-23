@@ -8,6 +8,7 @@ import com.agy.shell.ShizukuBridge;
 import com.agy.theme.ThemeManager;
 import com.agy.ui.MainActivity;
 
+import java.io.File;
 import java.lang.ref.WeakReference;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
@@ -98,6 +99,34 @@ public final class AndroidBridge {
     @JavascriptInterface
     public void setDesktopMode(boolean enabled) {
         ui.setDesktopMode(enabled);
+    }
+
+    @JavascriptInterface
+    public boolean getOfflineMode() {
+        return com.agy.offline.OfflinePrefs.isEnabled(appContext);
+    }
+
+    @JavascriptInterface
+    public boolean setOfflineMode(boolean enabled) {
+        com.agy.offline.OfflinePrefs.setEnabled(appContext, enabled);
+        File token = com.agy.oauth.OAuthTokenStore.tokenFile(appContext);
+        if (token != null && token.isFile()) {
+            File backup = new File(token.getParentFile(), "jetski-standalone-oauth-token.agy-backup");
+            try {
+                if (enabled && !backup.isFile()) {
+                    java.nio.file.Files.copy(token.toPath(), backup.toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    android.util.Log.i("AndroidBridge", "offline mode: backed up original token");
+                } else if (!enabled && backup.isFile()) {
+                    java.nio.file.Files.copy(backup.toPath(), token.toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    android.util.Log.i("AndroidBridge", "offline mode: restored original token");
+                }
+            } catch (Exception e) {
+                android.util.Log.w("AndroidBridge", "offline token backup/restore failed: " + e.getMessage());
+            }
+        }
+        return true;
     }
 
     @JavascriptInterface

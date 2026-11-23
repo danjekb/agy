@@ -53,6 +53,35 @@ def patch_main(file_path):
         modified = True
         print("[web-patch] Cleaned up trajectory registry on dispose")
 
+    # Local React state for the offline toggle so the switch visually flips
+    # when clicked (bridge only persists; it cannot trigger a React re-render).
+    offline_state_target = 'function NRb(){var a=MRb(),'
+    offline_state_repl = (
+        'function NRb(){var [agyOffline,setAgyOffline]=(0,E.useState)(()=>{try{return !!(window.Android&&window.Android.getOfflineMode&&window.Android.getOfflineMode())}catch(_){return !1}});'
+        'var a=MRb(),'
+    )
+    if offline_state_target in content and 'agyOffline' not in content:
+        content = content.replace(offline_state_target, offline_state_repl, 1)
+        print("[web-patch] Added offline toggle local state")
+        modified = True
+
+    # Offline mode toggle in Developer settings: seed a local placeholder
+    # OAuth token so the Google login screen is skipped. Bridge handles the
+    # token backup/restore; the switch simply persists the preference.
+    dev_offline_target = 'a?.featureFlagOverrides&&E.createElement(zRb,null)),E.createElement("div",{className:"hidden","data-screen":"Developer"}))'
+    dev_offline_repl = (
+        'a?.featureFlagOverrides&&E.createElement(zRb,null),'
+        'E.createElement(NU,null,E.createElement(OU,{label:"Offline mode (skip Google login)",'
+        'description:"Use a local placeholder token so no Google sign-in is required.",'
+        'rightElement:E.createElement(RU,{checked:!!(window.Android&&window.Android.getOfflineMode&&window.Android.getOfflineMode()),'
+        'onCheckedChange:v=>{try{if(window.Android&&window.Android.setOfflineMode)window.Android.setOfflineMode(v)}catch(_){}}})}))),'
+        'E.createElement("div",{className:"hidden","data-screen":"Developer"}))'
+    )
+    if dev_offline_target in content and "Offline mode (skip Google login)" not in content:
+        content = content.replace(dev_offline_target, dev_offline_repl, 1)
+        print("[web-patch] Injected offline mode toggle into Developer settings")
+        modified = True
+
     # Inject a "Custom Models" button into Models & Usage that opens the local
     # model-proxy management panel (state.json written by entry.js at runtime).
     models_target = 'description:"Manage your model quota and credits."},'

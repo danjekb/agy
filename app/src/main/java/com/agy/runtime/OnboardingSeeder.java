@@ -30,7 +30,22 @@ public final class OnboardingSeeder {
             seedStateFile(appContext, "antigravity_state.pbtxt",
                     new File(appData, "antigravity_state.pbtxt"));
 
-            // Seed a default custom-model entry for the local model proxy.
+            // Offline mode: seed a local placeholder token so the UI skips the
+            // Google sign-in screen. The core and generation already run through
+            // the local model proxy; no real Google token is required.
+            if (com.agy.offline.OfflinePrefs.isEnabled(appContext)) {
+                File offlineToken = new File(appContext.getFilesDir(), ".gemini/jetski-standalone-oauth-token");
+                String localToken = "{\"token\":{\"access_token\":\"local-offline-token\","
+                        + "\"token_type\":\"Bearer\",\"refresh_token\":\"local-offline-refresh\","
+                        + "\"expiry\":\"2099-01-01T00:00:00Z\"},\"auth_method\":\"local\","
+                        + "\"project_id\":\"noted-strength-420405\",\"region\":\"global\","
+                        + "\"writer_id\":\"local\"}";
+                // Overwrite unconditionally while offline mode is on: the
+                // bridge already backed up the original to *.agy-backup.
+                com.agy.util.AtomicFileWriter.writeText(offlineToken, localToken);
+                Log.i(TAG, "seeded local offline token (offline mode)");
+            }
+
             // No API key is bundled: configure it with `agy-models set-key`.
             File customModels = new File(appData, "custom_models.json");
             if (!customModels.isFile() || customModels.length() == 0) {
