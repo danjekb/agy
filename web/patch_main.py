@@ -32,6 +32,18 @@ def patch_main(file_path):
         print("[web-patch] Enabled Developer settings screen in release build")
         modified = True
 
+    # Make developer overrides actually apply in release builds.
+    # Hna() reads the Mendel experiment flag "enable-developer-mode" from the
+    # language server. Without it the Developer screen is visible (Va above)
+    # but every toggle is ignored: Wna() only forwards jetski.developer.*
+    # overrides to fj().flagOverrideSync when this returns true. Force it on.
+    target_hna = 'function Hna(){try{return hj(fj(),"enable-developer-mode")}catch{return!1}}'
+    replacement_hna = 'function Hna(){try{return hj(fj(),"enable-developer-mode")||!0}catch{return!0}}'
+    if target_hna in content:
+        content = content.replace(target_hna, replacement_hna, 1)
+        print("[web-patch] Forced enable-developer-mode Mendel flag on")
+        modified = True
+
     # Fix voice left_home unmount abort bug
     target_unmount = 'E.current!==YU||DU||kV("left_home")'
     replacement_unmount = 'E.current!==YU||DU||XU||kV("left_home")'
