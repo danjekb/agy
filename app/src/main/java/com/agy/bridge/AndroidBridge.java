@@ -24,12 +24,14 @@ public final class AndroidBridge {
     private final ThemeBridge themeBridge;
     private final EngineBridge engine;
     private final EngineConfigJson config;
+    private final Context appContext;
     private final String blobBridgeToken = createBlobBridgeToken();
     private volatile WeakReference<MainActivity> activityRef;
 
     public AndroidBridge(Context context, RuntimeManager runtime,
                          ShizukuBridge shizuku, ThemeManager theme) {
-        Context appContext = context.getApplicationContext();
+        this.appContext = context.getApplicationContext();
+        Context appContext = this.appContext;
         this.themeBridge = new ThemeBridge(theme);
         this.engine = new EngineBridge(runtime);
         this.config = new EngineConfigJson(appContext, runtime, engine, shizuku, themeBridge);
@@ -96,6 +98,33 @@ public final class AndroidBridge {
     @JavascriptInterface
     public void setDesktopMode(boolean enabled) {
         ui.setDesktopMode(enabled);
+    }
+
+    @JavascriptInterface
+    public String getModelManagerUrl() {
+        return EngineConfigJson.readModelManagerUrl(appContext);
+    }
+
+    @JavascriptInterface
+    public void openModelManager() {
+        final String url = getModelManagerUrl();
+        final MainActivity act = activityRef != null ? activityRef.get() : MainActivity.activeActivity;
+        if (act != null) {
+            act.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        android.content.Intent intent = new android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(url));
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                        act.startActivity(intent);
+                    } catch (Exception e) {
+                        android.util.Log.w("AndroidBridge", "Failed to open model manager: " + e.getMessage());
+                    }
+                }
+            });
+        }
     }
 
     // Native-only helpers used while preparing the trusted app document.

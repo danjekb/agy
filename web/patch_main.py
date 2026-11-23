@@ -20,6 +20,50 @@ def patch_main(file_path):
 
     modified = False
 
+    # Resume trajectory stream sync: expose the registry so the resume hook can
+    # re-link stalled ConnectRPC streams after Android unfreezes the WebView.
+    # Names adapted to our bundle (JSC$9550__states, $ga instead of Hja).
+    vka_target = 'this._factory=a}'
+    vka_repl = (
+        'this._factory=a;'
+        'this.refreshTrajectories=()=>{try{if(!this._factory)return;'
+        'for(let [c,e]of this.JSC$9550__states.entries()){let f=e;f.link.dispose();f.underlyingProvider.dispose();f.underlyingProvider=this._factory(c);f.link=$ga(f.underlyingProvider,f.provider,{omitInitial:!0});}'
+        '}catch(err){console.warn("[AGY ResumeSync] refreshTrajectories err",err)}};'
+        'window.__agTrajectoriesRegistry=this;'
+        'window.__agRefreshTrajectories=s=>{console.log("[AGY ResumeSync] Refreshing active trajectories triggered by",s);this.refreshTrajectories()}};'
+    )
+    if vka_target in content and "agTrajectoriesRegistry" not in content:
+        content = content.replace(vka_target, vka_repl, 1)
+        modified = True
+        print("[web-patch] Exposed trajectory refresh registry")
+
+    vka_disp_target = 'dispose(){for(let [a]of this.JSC$9550__states.entries())this._disposeEntry(a)}'
+    vka_disp_repl = 'dispose(){if(window.__agTrajectoriesRegistry===this){window.__agTrajectoriesRegistry=void 0;window.__agRefreshTrajectories=void 0}for(let [a]of this.JSC$9550__states.entries())this._disposeEntry(a)}'
+    if vka_disp_target in content:
+        content = content.replace(vka_disp_target, vka_disp_repl, 1)
+        modified = True
+        print("[web-patch] Cleaned up trajectory registry on dispose")
+
+    # Inject a "Custom Models" button into Models & Usage that opens the local
+    # model-proxy management panel (state.json written by entry.js at runtime).
+    models_target = 'description:"Manage your model quota and credits."},'
+    models_repl = (
+        'description:"Manage your model quota and credits."},'
+        'E.createElement(PU,{title:"Custom Models"},'
+        'E.createElement(NU,null,E.createElement(OU,{label:"Antigravity Model Manager",'
+        'description:"Open the local web panel to add, discover, and manage AI models.",'
+        'rightElement:E.createElement(BI,{variant:"primary",size:"sm",onClick:function(){'
+        'if(window.Android&&typeof window.Android.openModelManager==="function"){window.Android.openModelManager();return;}'
+        'var u=(window.Android&&typeof window.Android.getModelManagerUrl==="function"&&window.Android.getModelManagerUrl())'
+        '||(window.__APP_CONFIG__&&window.__APP_CONFIG__.modelManagerUrl)||"http://127.0.0.1:50996/_addon/";'
+        'window.open(u,"_blank");'
+        '}},"Open Dashboard")}))),'
+    )
+    if models_target in content and "Antigravity Model Manager" not in content:
+        content = content.replace(models_target, models_repl, 1)
+        print("[web-patch] Injected Custom Models manager button")
+        modified = True
+
     # Expose the web "Developer" settings screen in release builds.
     # Upstream gates it behind window.__APP_CONFIG__.devMode (build --dev),
     # but the developerMode feature itself is activated by the custom flag

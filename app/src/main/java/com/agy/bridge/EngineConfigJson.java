@@ -50,4 +50,28 @@ public final class EngineConfigJson {
             return "{}";
         }
     }
+
+    /** Reads the local model-proxy management URL from its state file. */
+    public static String readModelManagerUrl(Context appContext) {
+        if (appContext == null) {
+            return "http://127.0.0.1:50996/_addon/";
+        }
+        java.io.File[] candidates = new java.io.File[] {
+            new java.io.File(appContext.getFilesDir(), ".gemini/antigravity-app/.ide-proxy/state.json"),
+            new java.io.File(appContext.getFilesDir(), ".gemini/antigravity/.ide-proxy/state.json")
+        };
+        for (java.io.File stateFile : candidates) {
+            if (stateFile.isFile()) {
+                try {
+                    String sc = new String(java.nio.file.Files.readAllBytes(stateFile.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+                    org.json.JSONObject st = new org.json.JSONObject(sc);
+                    String mUrl = st.optString("managementUrl", "");
+                    if (!mUrl.isEmpty()) {
+                        return mUrl;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return "http://127.0.0.1:50996/_addon/";
+    }
 }
