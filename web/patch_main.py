@@ -20,6 +20,15 @@ def patch_main(file_path):
 
     modified = False
 
+    # Raise the text-attachment cap from 1MB to 10MB (Leostryx-style, adapted
+    # to our bundle signature; the Document path already uses 10MB).
+    cap_old = 'p.size>1048576)d?.("Text file size exceeds 1MB limit"),h(Lg.VALIDATION_CHECK_FAILED,Error("Text file size exceeds 1MB limit"))'
+    cap_new = 'p.size>10485760)d?.("Text file size exceeds 10MB limit"),h(Lg.VALIDATION_CHECK_FAILED,Error("Text file size exceeds 10MB limit"))'
+    if cap_old in content:
+        content = content.replace(cap_old, cap_new, 1)
+        print("[web-patch] Raised text attachment limit to 10MB")
+        modified = True
+
     # Resume trajectory stream sync: expose the registry so the resume hook can
     # re-link stalled ConnectRPC streams after Android unfreezes the WebView.
     # Names adapted to our bundle (JSC$9550__states, $ga instead of Hja).
