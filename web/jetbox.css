@@ -3466,3 +3466,51 @@ canvas.hiddenCanvasElement {
     z-index: var(--sdk-z-index-tooltip, 1070);
   }
 }
+
+/* ── AMOLED Black theme ──────────────────────────────────────────────
+   Pure-black surfaces for OLED displays. Layered on top of the dark
+   base theme; html.amoled is set by theme-bootstrap.js / theme_sync.
+   ───────────────────────────────────────────────────────────────────── */
+html.amoled,
+html.amoled body,
+html.amoled #root {
+  background-color: #000000 !important;
+}
+html.amoled {
+  --background: #000000 !important;
+  --foreground: #ffffff !important;
+  --bg-main: #000000 !important;
+  --bg-card: #000000 !important;
+  --vscode-editor-background: #000000 !important;
+  --vscode-sideBar-background: #000000 !important;
+  --vscode-titleBar-activeBackground: #000000 !important;
+  --sdk-background-viewport: #000000 !important;
+  --sdk-color-canvas: #000000 !important;
+  --sdk-color-surface: #000000 !important;
+  --sdk-background-primary: #000000 !important;
+}
+html.amoled [data-theme="dark"] {
+  --sdk-color-surface: #000000;
+  --sdk-color-surface-alt: #000000;
+  --sdk-color-canvas: #000000;
+  --sdk-background-base: #000000;
+  --sdk-background-primary: #000000;
+  --sdk-background-secondary: #000000;
+  --sdk-background-tertiary: #0a0a0a;
+  --sdk-background-viewport: #000000;
+  --sdk-background-primary: #000000;
+  --sdk-toolbar-bg: #000000;
+  --sdk-sidebar-bg: #000000;
+  --sdk-input-bg: #000000;
+  --sdk-search-bg: #000000;
+  --sdk-nav-input-bg: #000000;
+  --sdk-scrollbar-bg: #000000;
+  --sdk-comment-card-bg: #000000;
+  --sdk-secondary-color: #0a0a0a;
+  --sdk-secondary-hover: #141414;
+  --sdk-secondary-active: #1e1e1e;
+}
+html.amoled .theme-dark {
+  --bg-main: #000000;
+  --bg-card: #000000;
+}

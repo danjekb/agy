@@ -149,6 +149,8 @@ public class MainActivity extends Activity
         androidBridge.setActivity(this);
         webViewHost = new WebViewHost(this, themeManager, oauthManager, androidBridge, this);
         webViewHost.setListener(this);
+        // Repaint the live WebView when the theme is changed from Settings.
+        themeManager.setOnThemeChanged(this::refreshTheme);
 
         rootLayout = new FrameLayout(this);
         rootLayout.setBackgroundColor(themeManager.getBackgroundColor());

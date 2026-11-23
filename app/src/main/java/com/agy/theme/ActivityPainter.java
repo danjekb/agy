@@ -14,10 +14,13 @@ public final class ActivityPainter {
     }
 
     public static void apply(Activity activity, boolean dark) {
+        apply(activity, dark, dark ? ThemeColors.COLOR_DARK : ThemeColors.COLOR_LIGHT);
+    }
+
+    public static void apply(Activity activity, boolean dark, int bg) {
         if (activity == null) {
             return;
         }
-        int bg = dark ? ThemeColors.COLOR_DARK : ThemeColors.COLOR_LIGHT;
         Window window = activity.getWindow();
         if (window == null) {
             return;

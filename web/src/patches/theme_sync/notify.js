@@ -7,10 +7,12 @@ function notify() {
   state.last = theme;
   state.notifications++;
   try {
-    var isDark = (theme === 'dark');
+    var isDark = (theme === 'dark' || theme === 'amoled');
+    var isAmoled = (theme === 'amoled');
     document.documentElement.classList.toggle('dark', isDark);
     document.documentElement.classList.toggle('light', !isDark);
-    document.documentElement.style.colorScheme = theme;
+    document.documentElement.classList.toggle('amoled', isAmoled);
+    document.documentElement.style.colorScheme = isAmoled ? 'dark' : theme;
   } catch (e) { /* ignore */ }
   try {
     if (window.Android) {

@@ -11,7 +11,7 @@ public final class ThemeResolver {
     }
 
     public static boolean isDark(int mode, Context context) {
-        if (mode == ThemeColors.MODE_DARK) {
+        if (mode == ThemeColors.MODE_DARK || mode == ThemeColors.MODE_AMOLED) {
             return true;
         }
         if (mode == ThemeColors.MODE_LIGHT) {

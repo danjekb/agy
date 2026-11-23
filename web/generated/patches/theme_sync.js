@@ -39,6 +39,7 @@ function fromClassList() {
     var body = doc && doc.body;
     if (body && body.classList) {
       if (body.classList.contains('theme-light')) return 'light';
+      if (body.classList.contains('theme-amoled')) return 'amoled';
       if (body.classList.contains('theme-dark')) return 'dark';
     }
   } catch (e) { /* ignore */ }
@@ -46,6 +47,11 @@ function fromClassList() {
 }
 
 function resolveTheme() {
+  // AMOLED is a native-only marker layered on top of the dark base theme.
+  // It arrives via __AG_RESOLVED_THEME__ from ThemeManager.getTheme().
+  if (typeof window !== 'undefined' && window.__AG_RESOLVED_THEME__ === 'amoled') {
+    return 'amoled';
+  }
   var cl = fromClassList();
   if (cl) return cl;
   if (hostTheme === 'light') return 'light';
@@ -74,10 +80,12 @@ function notify() {
   state.last = theme;
   state.notifications++;
   try {
-    var isDark = (theme === 'dark');
+    var isDark = (theme === 'dark' || theme === 'amoled');
+    var isAmoled = (theme === 'amoled');
     document.documentElement.classList.toggle('dark', isDark);
     document.documentElement.classList.toggle('light', !isDark);
-    document.documentElement.style.colorScheme = theme;
+    document.documentElement.classList.toggle('amoled', isAmoled);
+    document.documentElement.style.colorScheme = isAmoled ? 'dark' : theme;
   } catch (e) { /* ignore */ }
   try {
     if (window.Android) {

@@ -32,6 +32,39 @@ def patch_main(file_path):
         print("[web-patch] Enabled Developer settings screen in release build")
         modified = True
 
+    # ---- AMOLED Black theme (4th option in Appearance > Theme) ----------
+    # The bundled UI has three modes (1=system, 2=light, 3=dark). Add 4=amoled
+    # to the option list, labels, icons and the string->int map used by
+    # onThemeChange, then tag <body> with theme-amoled so our theme_sync
+    # resolver reports 'amoled' back to the native Android bridge.
+    amoled_rules = [
+        ('const KKd=[1,2,3],', 'const KKd=[1,2,3,4],'),
+        ('case 2:return"Light";case 3:return"Dark";default:return"System"',
+         'case 2:return"Light";case 3:return"Dark";case 4:return"Amoled";default:return"System"'),
+        ('case 2:return"light_mode";case 3:return"dark_mode";default:return"monitor"',
+         'case 2:return"light_mode";case 3:return"dark_mode";case 4:return"dark_mode";default:return"monitor"'),
+        ('["system",1],["light",2],["dark",3]]',
+         '["system",1],["light",2],["dark",3],["amoled",4]]'),
+        ('themeMode:c}):a?3:2;',
+         'themeMode:c}):a?3:2;document.body.classList.toggle("theme-amoled",c===4);if(c===4){try{window.__AG_RESOLVED_THEME__="amoled"}catch(_){}}'),
+        # The core themeModeProvider only knows 1/2/3. For 4 handle the click
+        # locally: paint natively through the bridge and tag the DOM ourselves
+        # instead of pushing an unsupported value to core (which makes the
+        # selector snap back and look unclickable).
+        # On startup the picker reads its value from core's themeModeProvider,
+        # which only knows 1/2/3 and therefore falls back to Dark (3) even
+        # though native persisted AMOLED. Read our injected marker instead.
+        ('Cfc=()=>{var {themeModeProvider:a}=Bfc();return gl(a)}',
+         'Cfc=()=>{if(typeof window!=="undefined"&&window.__AG_RESOLVED_THEME__==="amoled")return 4;var {themeModeProvider:a}=Bfc();return gl(a)}'),
+        ('var g=(0,E.useCallback)(G=>{d(G)},[d])',
+         'var g=(0,E.useCallback)(G=>{if(G===4){try{if(window.Android&&typeof window.Android.setThemeByUser==="function")window.Android.setThemeByUser("amoled");window.__AG_RESOLVED_THEME__="amoled";document.body.classList.add("theme-amoled");document.documentElement.classList.add("dark","amoled");document.documentElement.classList.remove("light")}catch(_){}return}d(G)},[d])'),
+    ]
+    for target_amoled, replacement_amoled in amoled_rules:
+        if target_amoled in content:
+            content = content.replace(target_amoled, replacement_amoled, 1)
+            print("[web-patch] Added AMOLED theme option")
+            modified = True
+
     # Make developer overrides actually apply in release builds.
     # Hna() reads the Mendel experiment flag "enable-developer-mode" from the
     # language server. Without it the Developer screen is visible (Va above)

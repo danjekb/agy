@@ -36,7 +36,10 @@ public final class AppLoader {
             theme.applyToWebView(webView);
         }
         String hostTheme;
-        if (theme != null && theme.mode() == com.agy.theme.ThemeColors.MODE_DARK) {
+        if (theme != null && (theme.mode() == com.agy.theme.ThemeColors.MODE_DARK
+                || theme.mode() == com.agy.theme.ThemeColors.MODE_AMOLED)) {
+            // Web UI only understands dark/light as a base; AMOLED is layered
+            // on top via __AG_RESOLVED_THEME__ and the html.amoled CSS class.
             hostTheme = "dark";
         } else if (theme != null && theme.mode() == com.agy.theme.ThemeColors.MODE_LIGHT) {
             hostTheme = "light";

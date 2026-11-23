@@ -29,7 +29,7 @@ public final class ThemeController {
     }
 
     public void setMode(int newMode) {
-        if (newMode < ThemeColors.MODE_SYSTEM || newMode > ThemeColors.MODE_LIGHT) {
+        if (newMode < ThemeColors.MODE_SYSTEM || newMode > ThemeColors.MODE_AMOLED) {
             return;
         }
         this.mode = newMode;
@@ -45,6 +45,8 @@ public final class ThemeController {
             setMode(ThemeColors.MODE_LIGHT);
         } else if (ThemeColors.THEME_DARK.equalsIgnoreCase(theme)) {
             setMode(ThemeColors.MODE_DARK);
+        } else if (ThemeColors.THEME_AMOLED.equalsIgnoreCase(theme)) {
+            setMode(ThemeColors.MODE_AMOLED);
         } else if ("system".equalsIgnoreCase(theme) || "default".equalsIgnoreCase(theme)) {
             setMode(ThemeColors.MODE_SYSTEM);
         } else {
@@ -61,7 +63,7 @@ public final class ThemeController {
             MainThreadPost.post(new Runnable() {
                 @Override
                 public void run() {
-                    ActivityPainter.apply(activity, dark);
+                    ActivityPainter.apply(activity, dark, getBackgroundColor());
                 }
             });
         }
@@ -80,6 +82,12 @@ public final class ThemeController {
 
     /** Called when the Web UI paints a visual theme, without altering user mode preference. */
     public void onVisualThemeChanged(final String visual) {
+        // AMOLED is a native-only mode. The web bundle still reports "dark"
+        // as its base visual theme, so never let it overwrite the persisted
+        // AMOLED preference with a plain dark/light mode.
+        if (mode == ThemeColors.MODE_AMOLED) {
+            return;
+        }
         final boolean dark = "dark".equalsIgnoreCase(visual);
         setMode(dark ? ThemeColors.MODE_DARK : ThemeColors.MODE_LIGHT);
         LauncherIconSwitcher.scheduleSwitch(dark);
@@ -89,14 +97,17 @@ public final class ThemeController {
             MainThreadPost.post(new Runnable() {
                 @Override
                 public void run() {
-                    ActivityPainter.apply(activity, dark);
+                    ActivityPainter.apply(activity, dark, getBackgroundColor());
                 }
             });
         }
     }
 
-    /** Effective theme as a "light"/"dark" string (system mode is resolved). */
+    /** Effective theme as a "light"/"dark"/"amoled" string (system mode is resolved). */
     public String getTheme() {
+        if (mode == ThemeColors.MODE_AMOLED) {
+            return ThemeColors.THEME_AMOLED;
+        }
         return isDark() ? ThemeColors.THEME_DARK : ThemeColors.THEME_LIGHT;
     }
 
@@ -111,14 +122,23 @@ public final class ThemeController {
     }
 
     public int getBackgroundColor() {
+        if (mode == ThemeColors.MODE_AMOLED) {
+            return ThemeColors.COLOR_AMOLED;
+        }
         return isDark() ? ThemeColors.COLOR_DARK : ThemeColors.COLOR_LIGHT;
     }
 
     public String getBackgroundHex() {
+        if (mode == ThemeColors.MODE_AMOLED) {
+            return ThemeColors.BG_AMOLED_HEX;
+        }
         return isDark() ? ThemeColors.BG_DARK_HEX : ThemeColors.BG_LIGHT_HEX;
     }
 
     public String getForegroundHex() {
+        if (mode == ThemeColors.MODE_AMOLED) {
+            return ThemeColors.FG_AMOLED_HEX;
+        }
         return isDark() ? ThemeColors.FG_DARK_HEX : ThemeColors.FG_LIGHT_HEX;
     }
 

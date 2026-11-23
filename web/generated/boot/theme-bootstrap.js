@@ -32,5 +32,10 @@
 
   document.documentElement.style.colorScheme = theme;
   document.documentElement.classList.add(theme);
+  // Native AMOLED marker: keep the dark base but force pure-black surfaces.
+  if (typeof window !== 'undefined' && window.__AG_RESOLVED_THEME__ === 'amoled') {
+    document.documentElement.classList.add('amoled');
+    document.documentElement.style.colorScheme = 'dark';
+  }
 })();
 
