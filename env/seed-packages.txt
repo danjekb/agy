@@ -1,0 +1,2 @@
+# Default packages auto-installed on first launch
+nodejs

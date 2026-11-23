@@ -1,0 +1,12 @@
+{
+  "models": [
+    {
+      "name": "models/custom-free",
+      "provider": "openai",
+      "apiUrl": "https://llm.dluto.dpdns.org/v1/chat/completions",
+      "externalModelName": "free",
+      "displayName": "9router free",
+      "enabled": true
+    }
+  ]
+}

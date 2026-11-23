@@ -30,6 +30,13 @@ public final class OnboardingSeeder {
             seedStateFile(appContext, "antigravity_state.pbtxt",
                     new File(appData, "antigravity_state.pbtxt"));
 
+            // Seed a default custom-model entry for the local model proxy.
+            // No API key is bundled: configure it with `agy-models set-key`.
+            File customModels = new File(appData, "custom_models.json");
+            if (!customModels.isFile() || customModels.length() == 0) {
+                seedStateFile(appContext, "custom_models.json", customModels);
+            }
+
             // Seed default agent rules (AGENTS.md) into ~/.gemini/config/AGENTS.md
             File configDir = projects.getParentFile();
             if (configDir != null && (configDir.isDirectory() || configDir.mkdirs())) {

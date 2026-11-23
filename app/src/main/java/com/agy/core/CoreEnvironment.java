@@ -78,6 +78,10 @@ public final class CoreEnvironment {
         // Emits "ANTIGRAVITY_OPEN_URL: <url>" directly to stdout from language_server
         // so OpenUrlWatcher captures the auth URL and opens the external browser reliably.
         env.put("ANTIGRAVITY_VSCODE_HOST", "1");
+        // Route Vertex/LLM generation through the local model proxy in addition
+        // to CLOUD_CODE_URL (catalog). The embedded core reads this variable to
+        // override its LLM gateway endpoint.
+        env.put("AGY_LLM_GATEWAY_URL", "http://127.0.0.1:50996");
         // Configure browser and desktop environment so core OAuth/open tools find the browser
         File xdgOpen = new File(bin, "xdg-open");
         env.put("BROWSER", xdgOpen.getAbsolutePath());

@@ -29,6 +29,9 @@ public final class CoreServerService extends Service {
     private com.agy.gateway.SystemGatewayServer gatewayServer;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private volatile boolean destroyed;
+    private volatile boolean modelProxyEnabled;
+    private Process modelProxyProcess;
+    private Thread modelProxyThread;
 
     @Override
     public void onCreate() {
@@ -59,6 +62,7 @@ public final class CoreServerService extends Service {
                 this::onSupervisorTerminated);
         supervisor.start();
 
+        startModelProxy();
         startBackgroundDaemon();
     }
 
@@ -129,8 +133,109 @@ public final class CoreServerService extends Service {
         });
     }
 
+    private File findProxyEntry() {
+        File f1 = new File(getFilesDir(), "usr/lib/model_proxy/entry.js");
+        if (f1.isFile()) return f1;
+        File f2 = new File(getFilesDir(), "model_proxy/entry.js");
+        if (f2.isFile()) return f2;
+        return null;
+    }
+
+    private File findNodeExecutable() {
+        File usrNode = new File(getFilesDir(), "usr/bin/node");
+        if (usrNode.canExecute()) return usrNode;
+        File nodeWrapper = new File(getFilesDir(), "runtime/bin/node");
+        if (nodeWrapper.canExecute()) return nodeWrapper;
+        return null;
+    }
+
+    private void startModelProxy() {
+        modelProxyEnabled = true;
+        modelProxyThread = new Thread(() -> {
+            File prefixDir = new File(getFilesDir(), "usr");
+            File logsDir = new File(getFilesDir(), "logs");
+            logsDir.mkdirs();
+            File logFile = new File(logsDir, "model-proxy.log");
+            File dataDir = new File(getFilesDir(), ".gemini/antigravity-app");
+            dataDir.mkdirs();
+            File tmpDir = new File(prefixDir, "tmp");
+            tmpDir.mkdirs();
+
+            try {
+                com.agy.util.AssetUnpacker.copyTree(getAssets(), "env/overlay/lib/model_proxy",
+                        new File(getFilesDir(), "usr/lib/model_proxy"));
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to sync model_proxy from assets: " + e.getMessage());
+            }
+
+            // Seed nodejs may still be installing on first launch.
+            for (int i = 0; i < 60 && !destroyed && modelProxyEnabled; i++) {
+                if (findNodeExecutable() != null && findProxyEntry() != null) break;
+                try { Thread.sleep(1200); } catch (InterruptedException e) { return; }
+            }
+
+            while (!destroyed && modelProxyEnabled) {
+                File nodeExe = findNodeExecutable();
+                File proxyEntry = findProxyEntry();
+                if (nodeExe == null || proxyEntry == null) {
+                    try { Thread.sleep(5000); } catch (InterruptedException e) { break; }
+                    continue;
+                }
+                try {
+                    Log.i(TAG, "Starting local model adapter proxy on port 50996...");
+                    java.util.List<String> cmd = new java.util.ArrayList<>();
+                    cmd.add(nodeExe.getAbsolutePath());
+                    cmd.add(proxyEntry.getAbsolutePath());
+                    cmd.add("--port");
+                    cmd.add("50996");
+                    cmd.add("--data-dir");
+                    cmd.add(dataDir.getAbsolutePath());
+                    cmd.add("--log-file");
+                    cmd.add(logFile.getAbsolutePath());
+                    ProcessBuilder pb = new ProcessBuilder(cmd);
+                    pb.environment().put("HOME", getFilesDir().getAbsolutePath());
+                    pb.environment().put("PREFIX", prefixDir.getAbsolutePath());
+                    pb.environment().put("PATH", prefixDir.getAbsolutePath() + "/bin:" + System.getenv("PATH"));
+                    pb.environment().put("TMPDIR", tmpDir.getAbsolutePath());
+                    pb.environment().put("TEMP", tmpDir.getAbsolutePath());
+                    pb.environment().put("TMP", tmpDir.getAbsolutePath());
+                    pb.environment().put("LD_LIBRARY_PATH", prefixDir.getAbsolutePath() + "/lib");
+                    File opensslCnf = new File(prefixDir, "etc/tls/openssl.cnf");
+                    if (opensslCnf.isFile()) pb.environment().put("OPENSSL_CONF", opensslCnf.getAbsolutePath());
+                    File certPem = new File(prefixDir, "etc/tls/cert.pem");
+                    if (certPem.isFile()) pb.environment().put("SSL_CERT_FILE", certPem.getAbsolutePath());
+                    pb.directory(getFilesDir());
+
+                    Process proc = pb.start();
+                    modelProxyProcess = proc;
+                    int exit = proc.waitFor();
+                    modelProxyProcess = null;
+                    if (!modelProxyEnabled || destroyed) break;
+                    Log.w(TAG, "Model proxy exited (" + exit + "), restarting in 2s...");
+                    Thread.sleep(2000);
+                } catch (InterruptedException ie) {
+                    break;
+                } catch (Exception e) {
+                    Log.w(TAG, "Model proxy error: " + e.getMessage());
+                    try { Thread.sleep(3000); } catch (InterruptedException ignored) { break; }
+                }
+            }
+        }, "ModelProxySupervisor");
+        modelProxyThread.start();
+    }
+
+    private void stopModelProxy() {
+        modelProxyEnabled = false;
+        if (modelProxyThread != null) modelProxyThread.interrupt();
+        if (modelProxyProcess != null) {
+            modelProxyProcess.destroy();
+            modelProxyProcess = null;
+        }
+    }
+
     @Override
     public void onDestroy() {
+        stopModelProxy();
         stopBackgroundDaemon();
         if (gatewayServer != null) {
             gatewayServer.stop();

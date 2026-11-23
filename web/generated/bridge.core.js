@@ -336,6 +336,48 @@ function installFetchRewrite() {
     return origFetch(resource, init);
   };
   global.__AG_FETCH_REWRITE__ = true;
+function configureModelGateway() {
+    // The WebView origin is https://127.0.0.1:<enginePort>, so an HTTP probe
+    // to the proxy port is blocked by CORS. Skip the probe: send SetCloudCodeURL
+    // straight to the local core RPC (same origin). The core then talks to the
+    // proxy itself; retries cover the case where node is still installing.
+    var targetUrl = 'http://127.0.0.1:50996';
+    var attempts = 0;
+    function apply() {
+      setRpcUrl(targetUrl, function () {
+        warn('model-gateway', 'Cloud Code routed to ' + targetUrl);
+      });
+      attempts++;
+      if (attempts < 20) {
+        setTimeout(apply, 3000);
+      }
+    }
+    apply();
+
+    function setRpcUrl(url, onSuccess) {
+      try {
+        var rpcUrl = appendCsrfQuery(coreBase() + '/exa.language_server_pb.LanguageServerService/SetCloudCodeURL');
+        var reqHeaders = new Headers({
+          'Content-Type': 'application/json',
+          'Connect-Protocol-Version': '1'
+        });
+        ensureCsrf(reqHeaders);
+        fetchWithStartupRetry(rpcUrl, {
+          method: 'POST',
+          headers: reqHeaders,
+          body: JSON.stringify({ url: url })
+        }, 5).then(function (rpcRes) {
+          if (rpcRes && rpcRes.ok && typeof onSuccess === 'function') onSuccess();
+        }).catch(function (err) {
+          warn('model-gateway', 'SetCloudCodeURL error', err);
+        });
+      } catch (e) {
+        warn('model-gateway', 'SetCloudCodeURL failure', e);
+      }
+    }
+  }
+
+  setTimeout(configureModelGateway, 1000);
 }
 
 function installMediaPolyfills() {
