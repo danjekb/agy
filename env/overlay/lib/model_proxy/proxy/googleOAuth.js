@@ -198,10 +198,8 @@ function exchangeToken(parameters, signal) {
             res.on('aborted', () => finish(new Error('Google token exchange ended unexpectedly')));
             res.on('error', () => finish(new Error('Google token exchange failed')));
             res.on('end', () => {
-                const responseText = Buffer.concat(chunks).toString('utf8');
                 if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
-                    console.error('[GoogleOAuth] Token exchange failed:', res.statusCode, responseText);
-                    finish(new Error(`Token exchange failed (${res.statusCode}): ${responseText}`));
+                    finish(new Error((0, googleAccessErrors_1.describeGoogleAccessError)(res.statusCode || 502, 'oauth').message));
                     return;
                 }
                 try {
@@ -239,9 +237,9 @@ async function loginGoogleAccount(options, openExternal, dependencies = {}) {
         throw new Error('Choose Antigravity sign-in or Custom Desktop OAuth.');
     const native = options.authMode === 'antigravity' ? (dependencies.resolveNativeClient || googleNativeClient_1.resolveGoogleNativeClient)() : undefined;
     const clientId = (native?.clientId ?? options.clientId)?.trim();
-    const clientSecret = native ? undefined : options.clientSecret?.trim();
-    // Match the recognized vendor client's registered callback while listening only on IPv4 loopback (always 127.0.0.1 IP on Android).
-    const callbackHost = '127.0.0.1';
+    const clientSecret = (native?.clientSecret ?? options.clientSecret)?.trim();
+    // Match the recognized vendor client's registered callback while listening only on IPv4 loopback.
+    const callbackHost = native ? 'localhost' : '127.0.0.1';
     const callbackPath = native ? '/oauth-callback' : '/oauth2callback';
     if (!clientId || !/^[A-Za-z0-9_.-]+\.apps\.googleusercontent\.com$/.test(clientId) || clientId.length > 512) {
         throw new Error('Enter your Google Desktop OAuth client ID (.apps.googleusercontent.com).');
@@ -261,24 +259,12 @@ async function loginGoogleAccount(options, openExternal, dependencies = {}) {
         let finished = false, exchanging = false;
         let redirectUri = '';
         let timer;
-        let server;
-        let unregisterCallback;
         const cleanup = () => {
             clearTimeout(timer);
             options.signal?.removeEventListener('abort', onAbort);
             tokenController.abort();
-            if (unregisterCallback) {
-                try { unregisterCallback(); } catch {}
-                unregisterCallback = undefined;
-            }
-            if (server) {
-                try {
-                    setTimeout(() => {
-                        server?.close();
-                        server?.closeIdleConnections();
-                    }, 5000);
-                } catch {}
-            }
+            server.close();
+            server.closeIdleConnections();
         };
         const finish = (error, account) => {
             if (finished)
@@ -291,20 +277,16 @@ async function loginGoogleAccount(options, openExternal, dependencies = {}) {
                 resolve(account);
         };
         const onAbort = () => finish(cancellation());
-        const handleRequest = (req, res) => {
+        const server = http.createServer((req, res) => {
             const reply = (status, text) => {
-                const isHtml = status === 200;
                 res.writeHead(status, {
-                    'Content-Type': isHtml ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8',
+                    'Content-Type': 'text/plain; charset=utf-8',
                     'Cache-Control': 'no-store',
+                    'Content-Security-Policy': "default-src 'none'",
                     'Referrer-Policy': 'no-referrer',
                     Connection: 'close',
                 });
-                if (isHtml) {
-                    res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Logowanie zakończone</title><style>body{font-family:sans-serif;background:#18181b;color:#f4f4f5;text-align:center;padding:40px 16px}.card{max-width:440px;margin:0 auto;background:#27272a;padding:28px;border-radius:12px;border:1px solid #3f3f46}.btn{display:inline-block;margin-top:20px;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:600}</style></head><body><div class="card"><h2>✅ Logowanie Google powiodło się!</h2><p>Twoje konto zostało dodane.</p><a class="btn" href="http://127.0.0.1:50996/_addon/">Wróć do konfiguracji (http://127.0.0.1:50996/_addon/)</a></div><script>setTimeout(function(){window.location.href='http://127.0.0.1:50996/_addon/';},1800);</script></body></html>`);
-                } else {
-                    res.end(text);
-                }
+                res.end(text);
             };
             if (finished || !redirectUri) {
                 reply(410, 'This login attempt has ended.');
@@ -323,13 +305,9 @@ async function loginGoogleAccount(options, openExternal, dependencies = {}) {
                 return;
             }
             const expected = new URL(redirectUri);
-            const hostHeader = req.headers.host || '';
-            const isLoopbackHost = hostHeader === expected.host ||
-                hostHeader.startsWith('127.0.0.1:') ||
-                hostHeader.startsWith('localhost:') ||
-                hostHeader === '127.0.0.1' ||
-                hostHeader === 'localhost';
-            if (!isLoopbackHost || callback.pathname !== callbackPath) {
+            if (req.headers.host !== expected.host ||
+                callback.origin !== expected.origin ||
+                callback.pathname !== callbackPath) {
                 reply(404, 'Not found.');
                 return;
             }
@@ -409,14 +387,29 @@ async function loginGoogleAccount(options, openExternal, dependencies = {}) {
                 });
             })
                 .catch((error) => {
-                console.error('[GoogleOAuth] Login error:', error);
-                reply(502, `Login could not be completed: ${error && error.message ? error.message : error}`);
+                reply(502, 'Login could not be completed. Return to the application for details.');
                 finish(error instanceof Error ? error : new Error('Google login failed'));
             });
-        };
-
-        const startFlow = (port) => {
-            redirectUri = `http://${callbackHost}:${port}${callbackPath}`;
+        });
+        server.headersTimeout = 10000;
+        server.requestTimeout = 10000;
+        server.keepAliveTimeout = 1000;
+        server.maxConnections = 8;
+        server.on('connection', (socket) => socket.setTimeout(10000, () => socket.destroy()));
+        server.on('error', () => finish(new Error('Could not open the local Google login callback')));
+        options.signal?.addEventListener('abort', onAbort, { once: true });
+        timer = setTimeout(() => finish(cancellation('Google login timed out. Start login again.')), timeoutMs);
+        server.listen(0, '127.0.0.1', () => {
+            if (finished) {
+                server.close();
+                return;
+            }
+            const address = server.address();
+            if (!address || typeof address === 'string') {
+                finish(new Error('Google login callback did not start'));
+                return;
+            }
+            redirectUri = `http://${callbackHost}:${address.port}${callbackPath}`;
             const authorization = new URL(exports.GOOGLE_AUTHORIZATION_URL);
             authorization.search = new URLSearchParams({
                 client_id: clientId,
@@ -432,36 +425,7 @@ async function loginGoogleAccount(options, openExternal, dependencies = {}) {
             void Promise.resolve()
                 .then(() => openExternal(authorization.toString()))
                 .catch(() => finish(new Error('Could not open the browser for Google login')));
-        };
-
-        options.signal?.addEventListener('abort', onAbort, { once: true });
-        timer = setTimeout(() => finish(cancellation('Google login timed out. Start login again.')), timeoutMs);
-
-        if (typeof dependencies.registerCallback === 'function') {
-            const port = dependencies.callbackPort || 50996;
-            unregisterCallback = dependencies.registerCallback(handleRequest);
-            startFlow(port);
-        } else {
-            server = http.createServer(handleRequest);
-            server.headersTimeout = 10000;
-            server.requestTimeout = 10000;
-            server.keepAliveTimeout = 1000;
-            server.maxConnections = 8;
-            server.on('connection', (socket) => socket.setTimeout(10000, () => socket.destroy()));
-            server.on('error', () => finish(new Error('Could not open the local Google login callback')));
-            server.listen(0, '127.0.0.1', () => {
-                if (finished) {
-                    server?.close();
-                    return;
-                }
-                const address = server?.address();
-                if (!address || typeof address === 'string') {
-                    finish(new Error('Google login callback did not start'));
-                    return;
-                }
-                startFlow(address.port);
-            });
-        }
+        });
     });
 }
 //# sourceMappingURL=googleOAuth.js.map

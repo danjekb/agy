@@ -93,39 +93,12 @@ async function startStandaloneService(options) {
     if (!/^[a-f0-9]{64}$/.test(options.token) || !/^[a-f0-9-]{36}$/.test(options.instance))
         throw new Error('Invalid service identity');
     codec.configureCredentialDirectory(options.dataDirectory);
-    let currentAuthUrl = '';
-    const openExternal = async (url) => {
-        currentAuthUrl = url;
-        return (0, browserLauncher_1.openBrowser)(url);
-    };
-    let activeOAuthHandler = null;
-    const dependencies = {
-        callbackPort: options.port,
-        registerCallback: (handler) => {
-            activeOAuthHandler = handler;
-            return () => {
-                if (activeOAuthHandler === handler) {
-                    activeOAuthHandler = null;
-                }
-            };
-        },
-    };
-    const manager = (0, modelManagement_1.createModelManager)(options.dataDirectory, codec, openExternal, dependencies);
+    const manager = (0, modelManagement_1.createModelManager)(options.dataDirectory, codec, browserLauncher_1.openBrowser);
     const stop = async () => {
-        currentAuthUrl = '';
-        activeOAuthHandler = null;
         manager.googleLoginCancel();
         await (0, proxy_1.stopProxy)();
     };
-    const baseActions = (0, modelActions_1.createModelActions)(manager);
-    const actions = {
-        ...baseActions,
-        'storage:google-auth-url': () => ({ url: currentAuthUrl }),
-        'storage:google-login-cancel': () => {
-            currentAuthUrl = '';
-            return baseActions['storage:google-login-cancel']();
-        },
-    };
+    const actions = (0, modelActions_1.createModelActions)(manager);
     const handleDelegation = (0, modelDelegation_1.createModelDelegation)(proxy_1.loadCustomModels);
     // "proxy:start -- --open" puts this on the browser command line instead of the token.
     let handoff;
@@ -133,23 +106,12 @@ async function startStandaloneService(options) {
         const preload = fs.readFileSync(path.join(__dirname, name), 'utf8');
         return `(function(exports,require){\n${preload}\n})({},name=>{if(name==='electron')return {ipcRenderer:bridge};throw new Error('Unsupported module');});`;
     });
-    const autoToken = `sessionStorage.setItem(key, ${JSON.stringify(options.token)});\n`;
-    const appScript = `${BRIDGE}\n${autoToken}\n${augmentations.join('\n')}`;
+    const appScript = `${BRIDGE}\n${augmentations.join('\n')}`;
     const respond = (res, status, value) => {
         res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(value));
     };
     const handleManagement = (req, res) => {
-        const urlPath = (req.url || '').split('?')[0];
-        if (urlPath === '/oauth-callback' || urlPath === '/oauth2callback') {
-            if (activeOAuthHandler) {
-                activeOAuthHandler(req, res);
-                return true;
-            }
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-            res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Logowanie zakończone</title><style>body{font-family:sans-serif;background:#18181b;color:#f4f4f5;text-align:center;padding:40px 16px}.card{max-width:440px;margin:0 auto;background:#27272a;padding:28px;border-radius:12px;border:1px solid #3f3f46}.btn{display:inline-block;margin-top:20px;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:600}</style></head><body><div class="card"><h2>Sesja logowania Google</h2><p>Brak aktywnego żądania autoryzacji lub autoryzacja wygasła.</p><a class="btn" href="http://127.0.0.1:${options.port}/_addon/">Wróć do konfiguracji (http://127.0.0.1:${options.port}/_addon/)</a></div><script>setTimeout(function(){window.location.href='http://127.0.0.1:${options.port}/_addon/';},2000);</script></body></html>`);
-            return true;
-        }
         // startProxy guards every route (including generation) before this handler.
         if (!(req.url || '').startsWith('/_addon'))
             return false;
@@ -181,8 +143,7 @@ async function startStandaloneService(options) {
             });
             return true;
         }
-        const isLoopback = req.socket && (req.socket.remoteAddress === '127.0.0.1' || req.socket.remoteAddress === '::1' || req.socket.remoteAddress === '::ffff:127.0.0.1');
-        if (!isLoopback && !equalToken(req.headers.authorization, options.token)) {
+        if (!equalToken(req.headers.authorization, options.token)) {
             respond(res, 401, { error: 'Open the authenticated management URL from proxy:start' });
             return true;
         }
