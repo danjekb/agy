@@ -176,3 +176,21 @@ agy-notify cancel -t "Build Finished"
 - **Documentation Sync:** Every module (`modules/*`, `app/`, `web/`, `env/`) must maintain an accurate, concise `README.md`. Any change to code, interfaces, or flags MUST be accompanied by immediate documentation updates.
 - **No Hardcoded Crutches:** Avoid hardcoding paths or assumptions where dynamic calculation (`$PREFIX`, `$HOME`, `$PROJECT_ROOT`) is possible.
 - **Clean State:** Keep working trees clean, avoid creating dead or duplicated state, and do not commit temporary build artifacts.
+
+---
+
+## 8. Reverse Engineering Reference (leanrea)
+
+When asked to inspect, decompile, patch, rebuild, or analyse any APK, DEX/Smali,
+native `.so`, Electron/ASAR, WASM, or other shipped software, follow the
+evidence-first workflow in the bundled reference:
+
+- **Repository:** `docs/LEANREA.md` (full `leanrea` skill v2.3).
+- **Seeded copy in the app:** `$HOME/runtime/seed/LEANREA.md`.
+- **Session policy reference (optional):** `$HOME/runtime/seed/OPERATING_POLICY.md` — consult on demand; the environment rules above remain authoritative.
+
+Core rules: work on copies (never overwrite the only original), inventory before
+decompiling, distinguish observed / inferred / unknown, make the smallest
+reversible change with a diff, and verify build + install + runtime separately.
+Do not treat a feature controlled by a remote backend, subscription, or account
+entitlement as "unlocked" just because a local UI control is visible.
