@@ -116,7 +116,15 @@ public final class RuntimeManager {
         cmd.add(loader.getAbsolutePath());
         cmd.add("--library-path");
         cmd.add(lib.getAbsolutePath());
-        if (lseCompat.isFile()) {
+        // Only preload the LSE atomics compatibility shim on CPUs that actually
+        // lack the ARMv8.1-A "atomics" feature. This mirrors start_core.sh.
+        // Loading it unconditionally breaks startup on modern cores: the shim
+        // is linked against Bionic (DT_NEEDED libdl.so / libc.so with the
+        // Bionic LIBC version tag), which is incompatible with the glibc
+        // loader and produces "libdl.so: cannot open shared object file" or
+        // "version `LIBC' not found" (exit 127).
+        if (lseCompat.isFile() && !hasAtomicsFeature()) {
+            Log.i(TAG, "CPU lacks ARMv8.1 atomics; preloading liblse_compat.so");
             cmd.add("--preload");
             cmd.add(lseCompat.getAbsolutePath());
         }
@@ -147,6 +155,36 @@ public final class RuntimeManager {
         }
 
         return cmd.toArray(new String[0]);
+    }
+
+    /**
+     * Returns true when the CPU advertises ARMv8.1-A atomics (LSE) in
+     * /proc/cpuinfo. When present the glibc core uses natively available
+     * ldaddal/ldclr instructions and must NOT be linked with liblse_compat.so.
+     */
+    private static boolean hasAtomicsFeature() {
+        File cpuinfo = new File("/proc/cpuinfo");
+        if (!cpuinfo.isFile()) {
+            return false;
+        }
+        java.io.BufferedReader reader = null;
+        try {
+            reader = new java.io.BufferedReader(new java.io.FileReader(cpuinfo));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.regionMatches(true, 0, "Features", 0, 8)
+                        && line.toLowerCase(java.util.Locale.ROOT).contains("atomics")) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "could not read /proc/cpuinfo: " + e.getMessage());
+        } finally {
+            if (reader != null) {
+                try { reader.close(); } catch (Exception ignored) {}
+            }
+        }
+        return false;
     }
 
     public void applyEnvironment(ProcessBuilder pb) {

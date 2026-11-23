@@ -31,6 +31,16 @@ public final class ManifestVerifier {
                 if (relative.endsWith("manifest.json")) {
                     continue;
                 }
+                // runtime/bin is regenerated on-device by ShellBridgeInstaller
+                // (bridge scripts, open-url shims, torch shims). Those files
+                // intentionally differ from the build-time copies hashed into
+                // the manifest, so comparing them yields false integrity
+                // failures (e.g. bin/chrome hash mismatch). The remaining
+                // directories (lib/, certs/, seed/, etc/) are still verified
+                // byte-for-byte, and the core binary is checked below.
+                if (relative.startsWith("bin/")) {
+                    continue;
+                }
                 String expected = files.optString(relative, null);
                 File target = new File(runtimeDir, relative);
                 if (expected == null || !target.isFile()) {

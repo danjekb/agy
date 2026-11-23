@@ -21,6 +21,17 @@ def pack_libraries(glibc_dir: str, dest_lib_dir: str) -> list:
             mode = os.stat(dst).st_mode
             os.chmod(dst, mode | stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             copied.append(item)
+
+    # Compatibility symlink: liblse_compat.so carries a DT_NEEDED entry for the
+    # unversioned soname "libdl.so", while the glibc dir only ships the
+    # versioned "libdl.so.2". On CPUs that need the LSE preload the loader would
+    # otherwise fail with "libdl.so: cannot open shared object file".
+    link_path = os.path.join(dest_lib_dir, "libdl.so")
+    if os.path.isfile(os.path.join(glibc_dir, "libdl.so.2")):
+        if os.path.islink(link_path) or os.path.exists(link_path):
+            os.remove(link_path)
+        os.symlink("libdl.so.2", link_path)
+        copied.append("libdl.so")
             
     # Copy glibc/etc network and name service configs (hosts, resolv.conf, nsswitch.conf)
     etc_src = os.path.join(glibc_dir, "etc")
