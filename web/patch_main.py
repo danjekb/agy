@@ -20,6 +20,18 @@ def patch_main(file_path):
 
     modified = False
 
+    # Expose the web "Developer" settings screen in release builds.
+    # Upstream gates it behind window.__APP_CONFIG__.devMode (build --dev),
+    # but the developerMode feature itself is activated by the custom flag
+    # "enable-developer-mode" in Va. Force that flag on so the same screen is
+    # available in the normal com.agy release without changing package/ports.
+    target_dev = 'Va=[...(S9()?["enable-developer-mode"]:[])'
+    replacement_dev = 'Va=[...["enable-developer-mode"]'
+    if target_dev in content:
+        content = content.replace(target_dev, replacement_dev, 1)
+        print("[web-patch] Enabled Developer settings screen in release build")
+        modified = True
+
     # Fix voice left_home unmount abort bug
     target_unmount = 'E.current!==YU||DU||kV("left_home")'
     replacement_unmount = 'E.current!==YU||DU||XU||kV("left_home")'
